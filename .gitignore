@@ -2,5 +2,5 @@
 *.xml
 *.iml
 *.pyc
-.requirements.txt
+./requirements.txt
 
