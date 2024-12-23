@@ -11,6 +11,7 @@ import sys
 
 import numpy as np
 import torch
+from utils_tool.utils import utils
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
 from tqdm import tqdm, trange
@@ -21,11 +22,13 @@ from pytorch_pretrained_bert.modeling import BertForSequenceClassificationTag
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from tag_model.tag_tokenization import TagTokenizer
 from tag_model.tagging import get_tags, SRLPredictor
-logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                    datefmt = '%m/%d/%Y %H:%M:%S',
-                    level = logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+                    datefmt='%m/%d/%Y %H:%M:%S',
+                    level=logging.INFO)
 logger = logging.getLogger(__name__)
-#csv.field_size_limit(sys.maxsize)
+# csv.field_size_limit(sys.maxsize)
+
+
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
@@ -92,48 +95,51 @@ class DataProcessor(object):
                 lines.append(line)
             return lines
 
+
 class SnliProcessor(DataProcessor):
-  """Processor for the SNLI data set (GLUE version)."""
+    """Processor for the SNLI data set (GLUE version)."""
 
-  def get_train_examples(self, data_dir):
-    """See base class."""
-    return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
 
-  def get_dev_examples(self, data_dir):
-    """See base class."""
-    return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
 
-  def get_test_examples(self, data_dir):
-    """See base class."""
-    return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
+    def get_test_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
 
-  def get_labels(self):
-    """See base class."""
-    return ["contradiction", "entailment", "neutral"]
+    def get_labels(self):
+        """See base class."""
+        return ["contradiction", "entailment", "neutral"]
 
-  def _create_examples(self, lines, set_type):
-    """Creates examples for the training and dev sets."""
-    examples = []
-    for (i, line) in enumerate(lines):
-        if i == 0:
-            continue
-        guid = "%s-%s" % (set_type, line[0])
-        text_a = line[7]
-        text_b = line[8]
-        label = line[-1]
-        examples.append(
-            InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-    return examples
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            if i == 0:
+                continue
+            guid = "%s-%s" % (set_type, line[0])
+            text_a = line[7]
+            text_b = line[8]
+            label = line[-1]
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+        return examples
 
 
 tag_vocab = []
+
+
 def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer, srl_predictor):
     """Loads a data file into a list of `InputBatch`s."""
 
-    label_map = {label : i for i, label in enumerate(label_list)}
+    label_map = {label: i for i, label in enumerate(label_list)}
     print(label_map)
     max_aspect = 0
     features = []
@@ -142,9 +148,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         tokens_b = []
         tok_to_orig_index_a = []  # subword_token_index -> org_word_index
         tag_sequence = get_tags(srl_predictor, example.text_a, tag_vocab)
-        token_tag_sequence_a = QueryTagSequence(tag_sequence[0], tag_sequence[1])
+        token_tag_sequence_a = QueryTagSequence(
+            tag_sequence[0], tag_sequence[1])
         tokens_a_org = tag_sequence[0]
-        if len(tag_sequence[1])> max_aspect:
+        if len(tag_sequence[1]) > max_aspect:
             max_aspect = len(tag_sequence[1])
         tok_to_orig_index_a.append(0)  # [CLS]
         for (i, token) in enumerate(tokens_a_org):
@@ -156,7 +163,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         token_tag_sequence_b = None
         if example.text_b:
             tag_sequence = get_tags(srl_predictor, example.text_b, tag_vocab)
-            token_tag_sequence_b = QueryTagSequence(tag_sequence[0], tag_sequence[1])
+            token_tag_sequence_b = QueryTagSequence(
+                tag_sequence[0], tag_sequence[1])
             tokens_b_org = tag_sequence[0]
             if len(tag_sequence[1]) > max_aspect:
                 max_aspect = len(tag_sequence[1])
@@ -165,20 +173,23 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
                 for sub_token in sub_tokens:
                     tok_to_orig_index_b.append(i)
                     tokens_b.append(sub_token)
-            #print(len(tokens_a+tokens_b), len(tokens_a),len(tokens_b))
+            # print(len(tokens_a+tokens_b), len(tokens_a),len(tokens_b))
             if len(tokens_a+tokens_b) > max_seq_length-3:
-                print("too long!!!!",len(tokens_a+tokens_b), len(tokens_a),len(tokens_b))
+                print("too long!!!!", len(tokens_a+tokens_b),
+                      len(tokens_a), len(tokens_b))
             # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(tokens_a, tokens_b, tok_to_orig_index_a, tok_to_orig_index_b, max_seq_length - 3)
+            _truncate_seq_pair(tokens_a, tokens_b, tok_to_orig_index_a,
+                               tok_to_orig_index_b, max_seq_length - 3)
         else:
             # Account for [CLS] and [SEP] with "- 2"
             if len(tokens_a) > max_seq_length - 2:
                 print("too long!!!!", len(tokens_a))
                 tokens_a = tokens_a[:(max_seq_length - 2)]
-                tok_to_orig_index_a=tok_to_orig_index_a[:max_seq_length - 1] #already has the index for [CLS]
+                # already has the index for [CLS]
+                tok_to_orig_index_a = tok_to_orig_index_a[:max_seq_length - 1]
         tok_to_orig_index_a.append(tok_to_orig_index_a[-1] + 1)  # [SEP]
         over_tok_to_orig_index = tok_to_orig_index_a
-        if  example.text_b:
+        if example.text_b:
             tok_to_orig_index_b.append(tok_to_orig_index_b[-1] + 1)  # [SEP]
             offset = tok_to_orig_index_a[-1]
             for org_ix in tok_to_orig_index_b:
@@ -188,9 +199,10 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
         segment_ids = [0] * len(tokens)
         len_seq_a = tok_to_orig_index_a[len(tokens)-1] + 1
         len_seq_b = None
-        if  example.text_b:
+        if example.text_b:
             tokens += tokens_b + ["[SEP]"]
-            len_seq_b = tok_to_orig_index_b[len(tokens_b)] + 1  #+1 SEP -1 for index
+            len_seq_b = tok_to_orig_index_b[len(
+                tokens_b)] + 1  # +1 SEP -1 for index
             segment_ids += [1] * (len(tokens_b) + 1)
 
         input_ids = tokenizer.convert_tokens_to_ids(tokens)
@@ -205,12 +217,13 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
                 pre_ix = org_ix
                 end_split_ix = token_ix - 1
                 if start_split_ix != -1:
-                    orig_to_token_split_idx.append((start_split_ix, end_split_ix))
+                    orig_to_token_split_idx.append(
+                        (start_split_ix, end_split_ix))
                 start_split_ix = token_ix
         if start_split_ix != -1:
             orig_to_token_split_idx.append((start_split_ix, token_ix))
         while len(orig_to_token_split_idx) < max_seq_length:
-            orig_to_token_split_idx.append((-1,-1))
+            orig_to_token_split_idx.append((-1, -1))
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
         input_mask = [1] * len(input_ids)
@@ -230,26 +243,28 @@ def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer
             logger.info("*** Example ***")
             logger.info("guid: %s" % (example.guid))
             logger.info("tokens: %s" % " ".join(
-                    [str(x) for x in tokens]))
-            logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-            logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+                [str(x) for x in tokens]))
+            logger.info("input_ids: %s" %
+                        " ".join([str(x) for x in input_ids]))
+            logger.info("input_mask: %s" %
+                        " ".join([str(x) for x in input_mask]))
             logger.info(
-                    "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+                "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
             logger.info("label: %s (id = %d)" % (example.label, label_id))
 
         features.append(
-                InputFeatures(input_ids=input_ids,
-                              input_mask=input_mask,
-                              segment_ids=segment_ids,
-                              token_tag_sequence_a = token_tag_sequence_a,
-                              token_tag_sequence_b = token_tag_sequence_b,
-                              len_seq_a = len_seq_a,
-                              len_seq_b = len_seq_b,
-                              input_tag_ids = None,
-                              input_tag_verbs = None,
-                              input_tag_len = None,
-                              orig_to_token_split_idx=orig_to_token_split_idx,
-                              label_id=label_id))
+            InputFeatures(input_ids=input_ids,
+                          input_mask=input_mask,
+                          segment_ids=segment_ids,
+                          token_tag_sequence_a=token_tag_sequence_a,
+                          token_tag_sequence_b=token_tag_sequence_b,
+                          len_seq_a=len_seq_a,
+                          len_seq_b=len_seq_b,
+                          input_tag_ids=None,
+                          input_tag_verbs=None,
+                          input_tag_len=None,
+                          orig_to_token_split_idx=orig_to_token_split_idx,
+                          label_id=label_id))
     return features
 
 
@@ -268,12 +283,13 @@ def transform_tag_features(max_num_aspect, features, tag_tokenizer, max_seq_leng
             len_seq_b = example.len_seq_b
             input_que_tag_ids = []
             for idx, query_tag_ids in enumerate(tag_ids_list_a):
-                query_tag_ids = [1] + query_tag_ids[:len_seq_a - 2] + [2] #CLS and SEP
+                query_tag_ids = [
+                    1] + query_tag_ids[:len_seq_a - 2] + [2]  # CLS and SEP
                 input_que_tag_ids.append(query_tag_ids)
                 # construct input doc tag ids with same length as input ids
             for idx, doc_tag_ids in enumerate(tag_ids_list_b):
                 tmp_input_tag_ids = input_que_tag_ids[idx]
-                doc_input_tag_ids = doc_tag_ids[:len_seq_b - 1] + [2] #SEP
+                doc_input_tag_ids = doc_tag_ids[:len_seq_b - 1] + [2]  # SEP
                 input_tag_id = tmp_input_tag_ids + doc_input_tag_ids
                 while len(input_tag_id) < max_seq_length:
                     input_tag_id.append(0)
@@ -281,7 +297,8 @@ def transform_tag_features(max_num_aspect, features, tag_tokenizer, max_seq_leng
                 input_tag_ids.append(input_tag_id)
         else:
             for idx, query_tag_ids in enumerate(tag_ids_list_a):
-                query_tag_ids = [1] + query_tag_ids[:len_seq_a - 2] + [2] #CLS and SEP
+                query_tag_ids = [
+                    1] + query_tag_ids[:len_seq_a - 2] + [2]  # CLS and SEP
                 input_tag_id = query_tag_ids
                 while len(input_tag_id) < max_seq_length:
                     input_tag_id.append(0)
@@ -291,6 +308,7 @@ def transform_tag_features(max_num_aspect, features, tag_tokenizer, max_seq_leng
         example.input_tag_ids = input_tag_ids
         new_features.append(example)
     return new_features
+
 
 def _truncate_seq_pair(tokens_a, tokens_b, tok_to_orig_index_a, tok_to_orig_index_b, max_length):
     while True:
@@ -304,14 +322,16 @@ def _truncate_seq_pair(tokens_a, tokens_b, tok_to_orig_index_a, tok_to_orig_inde
             tokens_b.pop()
             tok_to_orig_index_b.pop()
 
+
 def accuracy(out, labels):
     outputs = np.argmax(out, axis=1)
     return np.sum(outputs == labels)
 
+
 def main():
     parser = argparse.ArgumentParser()
 
-    ## Required parameters
+    # Required parameters
     parser.add_argument("--data_dir",
                         default="glue_data/MNLI/",
                         type=str,
@@ -336,7 +356,7 @@ def main():
                         type=int,
                         help="max_num_aspect")
 
-    ## Other parameters
+    # Other parameters
     parser.add_argument("--cache_dir",
                         default="",
                         type=str,
@@ -403,15 +423,18 @@ def main():
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
-    parser.add_argument('--server_ip', type=str, default='', help="Can be used for distant debugging.")
-    parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")
+    parser.add_argument('--server_ip', type=str, default='',
+                        help="Can be used for distant debugging.")
+    parser.add_argument('--server_port', type=str, default='',
+                        help="Can be used for distant debugging.")
     args = parser.parse_args()
 
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
         import ptvsd
         print("Waiting for debugger attach")
-        ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
+        ptvsd.enable_attach(
+            address=(args.server_ip, args.server_port), redirect_output=True)
         ptvsd.wait_for_attach()
 
     processors = {
@@ -419,7 +442,8 @@ def main():
     }
 
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        device = torch.device(
+            "cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         n_gpu = torch.cuda.device_count()
     else:
         torch.cuda.set_device(args.local_rank)
@@ -432,7 +456,7 @@ def main():
 
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
-                            args.gradient_accumulation_steps))
+            args.gradient_accumulation_steps))
 
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
 
@@ -443,10 +467,12 @@ def main():
         torch.cuda.manual_seed_all(args.seed)
 
     if not args.do_train and not args.do_eval and not args.do_predict:
-        raise ValueError("At least one of `do_train` or `do_eval` must be True.")
+        raise ValueError(
+            "At least one of `do_train` or `do_eval` must be True.")
 
     if os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train:
-        raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
+        raise ValueError(
+            "Output directory ({}) already exists and is not empty.".format(args.output_dir))
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
@@ -459,7 +485,8 @@ def main():
     label_list = processor.get_labels()
     num_labels = len(label_list)
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = BertTokenizer.from_pretrained(
+        args.bert_model, do_lower_case=args.do_lower_case)
     if args.tagger_path != None:
         srl_predictor = SRLPredictor(args.tagger_path)
     else:
@@ -488,21 +515,33 @@ def main():
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))
         logger.info("  Batch size = %d", args.eval_batch_size)
-        all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
-        all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-        all_start_end_idx = torch.tensor([f.orig_to_token_split_idx for f in eval_features], dtype=torch.long)
-        all_input_tag_ids = torch.tensor([f.input_tag_ids for f in eval_features], dtype=torch.long)
+        all_input_ids = torch.tensor(
+            [f.input_ids for f in eval_features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in eval_features], dtype=torch.long)
+        all_segment_ids = torch.tensor(
+            [f.segment_ids for f in eval_features], dtype=torch.long)
+        all_label_ids = torch.tensor(
+            [f.label_id for f in eval_features], dtype=torch.long)
+        all_start_end_idx = torch.tensor(
+            [f.orig_to_token_split_idx for f in eval_features], dtype=torch.long)
+        all_input_tag_ids = torch.tensor(
+            [f.input_tag_ids for f in eval_features], dtype=torch.long)
         eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_start_end_idx,
                                   all_input_tag_ids, all_label_ids)
         # Run prediction for full data
         eval_sampler = SequentialSampler(eval_data)
-        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
+        eval_dataloader = DataLoader(
+            eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
 
         # epoch = 1
         output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
-        model_state_dict = torch.load(output_model_file)
+        if utils.check_cuda == 'mps':
+            model_state_dict = torch.load(
+                output_model_file, map_location=torch.device('mps'))
+        else:
+            model_state_dict = torch.load(output_model_file)
+
         predict_model = BertForSequenceClassificationTag.from_pretrained(args.bert_model,
                                                                          state_dict=model_state_dict,
                                                                          num_labels=num_labels,
@@ -549,25 +588,33 @@ def main():
     if args.do_predict:
         eval_examples = processor.get_test_examples(args.data_dir)
         eval_features = convert_examples_to_features(
-            eval_examples, label_list, args.max_seq_length, tokenizer,srl_predictor=srl_predictor )
-        eval_features = transform_tag_features(args.max_num_aspect, eval_features, tag_tokenizer, args.max_seq_length)
+            eval_examples, label_list, args.max_seq_length, tokenizer, srl_predictor=srl_predictor)
+        eval_features = transform_tag_features(
+            args.max_num_aspect, eval_features, tag_tokenizer, args.max_seq_length)
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))
         logger.info("  Batch size = %d", args.eval_batch_size)
-        all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
-        all_start_end_idx = torch.tensor([f.orig_to_token_split_idx for f in eval_features], dtype=torch.long)
-        all_input_tag_ids = torch.tensor([f.input_tag_ids for f in eval_features], dtype=torch.long)
+        all_input_ids = torch.tensor(
+            [f.input_ids for f in eval_features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in eval_features], dtype=torch.long)
+        all_segment_ids = torch.tensor(
+            [f.segment_ids for f in eval_features], dtype=torch.long)
+        all_start_end_idx = torch.tensor(
+            [f.orig_to_token_split_idx for f in eval_features], dtype=torch.long)
+        all_input_tag_ids = torch.tensor(
+            [f.input_tag_ids for f in eval_features], dtype=torch.long)
         eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_start_end_idx,
                                   all_input_tag_ids)
         # Run prediction for full data
         eval_sampler = SequentialSampler(eval_data)
-        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
+        eval_dataloader = DataLoader(
+            eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
 
         output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
         model_state_dict = torch.load(output_model_file)
-        predict_model = BertForSequenceClassificationTag.from_pretrained(args.bert_model, state_dict=model_state_dict,num_labels = num_labels,tag_config=tag_config)
+        predict_model = BertForSequenceClassificationTag.from_pretrained(
+            args.bert_model, state_dict=model_state_dict, num_labels=num_labels, tag_config=tag_config)
         predict_model.to(device)
         predict_model.eval()
         predictions = []
@@ -580,7 +627,8 @@ def main():
             start_end_idx = start_end_idx.to(device)
             input_tag_ids = input_tag_ids.to(device)
             with torch.no_grad():
-                logits = predict_model(input_ids, segment_ids, input_mask, start_end_idx, input_tag_ids, None)
+                logits = predict_model(
+                    input_ids, segment_ids, input_mask, start_end_idx, input_tag_ids, None)
             logits = logits.detach().cpu().numpy()
             for (i, prediction) in enumerate(logits):
                 predict_label = np.argmax(prediction)
@@ -591,8 +639,23 @@ def main():
         with open(output_test_file, "w") as writer:
             writer.write("index" + "\t" + "prediction" + "\n")
             for pred in predictions:
-                writer.write(str(index) + "\t" + str(label_list[int(pred)]) + "\n")
+                writer.write(str(index) + "\t" +
+                             str(label_list[int(pred)]) + "\n")
                 index += 1
+
 
 if __name__ == "__main__":
     main()
+    """
+    python run_snli_predict.py \
+--data_dir /Users/meta/lam/deep/Understanding/SemBERT/glue_data/SNLI \
+--task_name snli \
+--eval_batch_size 128 \
+--max_seq_length 128 \
+--max_num_aspect 3 \
+--do_eval \
+--do_lower_case \
+--bert_model snli_model_dir \
+--output_dir snli_model_dir \
+--tagger_path srl_model_dir
+"""
