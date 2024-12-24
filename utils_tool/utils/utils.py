@@ -1,3 +1,12 @@
+import datetime
+
+
+def write_file_one_line(filename, msg):
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write('%s%s' % (datetime.datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"), '文件开始写入\n'))
+        # for msg in data:
+        file.write('%s\n' % msg)
 
 
 def check_cuda():
